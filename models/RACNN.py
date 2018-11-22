@@ -5,6 +5,11 @@ from torch.autograd import Variable
 
 from .vgg import vgg19_bn
 
+shift = 0
+scale = 0.1
+power = 1
+
+
 class RACNN(nn.Module):
     def __init__(self, num_classes, pretrained = True):
         super(RACNN, self).__init__()
@@ -58,6 +63,14 @@ class RACNN(nn.Module):
         pool5 = pool5.view(-1, 512)
         pool5_A = pool5_A.view(-1, 512)
         pool5_AA = pool5_AA.view(-1, 512)
+
+        # power layer
+        # pow1 = torch.pow((shift + scale * pool5), power)
+        # pow2 = torch.pow((shift + scale * pool5_A), power)
+        # pow3 = torch.pow((shift + scale * pool5_AA), power)
+        # logits1 = self.classifier1(pow1)
+        # logits2 = self.classifier2(pow2)
+        # logits3 = self.classifier3(pow3)
 
         """#Feature fusion
         scale123 = torch.cat([pool5, pool5_A, pool5_AA], 1)

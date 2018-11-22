@@ -8,6 +8,21 @@ def multitask_loss(preds, labels):
     #loss = torch.sum(torch.stack(loss))
     return loss
 
+
+def multitask_loss_add_prl(preds, labels, losses, size_average = True):
+    loss = []
+    for i in range(len(preds)):
+        loss.append(F.cross_entropy(preds[i], labels))
+    loss = torch.stack(loss)
+    if size_average:
+        loss = torch.mean(loss)
+    else:
+        loss = torch.sum(loss)
+
+    loss_all = loss + losses
+
+    return loss
+
 def pairwise_ranking_loss(preds, size_average = True):
     """
         preds:
@@ -17,7 +32,7 @@ def pairwise_ranking_loss(preds, size_average = True):
                     preds = [logits1[class], logits2[class]]
     """
     if len(preds) <= 1:
-        return torch.zeros(1).type(preds.type())
+        return torch.zeros(1).cuda()
     else:
         losses = []
         for pred in preds:
