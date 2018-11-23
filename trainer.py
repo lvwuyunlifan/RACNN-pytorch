@@ -10,7 +10,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
 import torch.nn.init as init
-from torch.autograd import Variable
+# from torch.autograd import Variable
 import torch.utils.data as data
 import torch.nn.functional as F
 
@@ -22,8 +22,15 @@ from models import RACNN, pairwise_ranking_loss, multitask_loss
 import argparse
 
 parser = argparse.ArgumentParser(description = 'Training arguments')
-parser.add_argument('--cuda', default = True, type = bool, help = "use cuda to train")
-parser.add_argument('--lr', default = 0.01, type = float, help = "initial learning rate")
+# parser.add_argument('--cuda', default = True, type = bool, help = "use cuda to train")
+# parser.add_argument('--lr', default = 0.01, type = float, help = "initial learning rate")
+
+# pytorch>0.4.1
+parser.add_argument('--cuda', action = "store_true", help = "use cuda to train")
+parser.add_argument('--lr', default = 0.01, type = float, help = "initial learning rate (default = 0.01)")
+parser.add_argument('--batch_size', default = 4, type = int, help = "batch size (default = 4)")
+parser.add_argument('--num_workers', default = 8, type = int, help = "number of worker to parralle read data (default = 8")
+
 args = parser.parse_args()
 decay_steps = [20, 40] # based on epoch
 
@@ -36,11 +43,19 @@ else:
     print(" [*] Set cuda: False")
 
 logger = Logger('./visual/' + 'RACNN_CUB200_9')
-cls_params = list(net.module.b1.parameters()) + list(net.module.b2.parameters()) + list(net.module.b3.parameters()) + list(net.module.classifier1.parameters()) + list(net.module.classifier2.parameters()) + list(net.module.classifier3.parameters())
+# cls_params = list(net.module.b1.parameters()) + list(net.module.b2.parameters()) + list(net.module.b3.parameters()) + list(net.module.classifier1.parameters()) + list(net.module.classifier2.parameters()) + list(net.module.classifier3.parameters())
+if args.cuda:
+    cls_params = list(net.module.b1.parameters()) + list(net.module.b2.parameters()) + list(net.module.b3.parameters()) + list(net.module.classifier1.parameters()) + list(net.module.classifier2.parameters()) + list(net.module.classifier3.parameters())
+else:
+    cls_params = list(net.b1.parameters()) + list(net.b2.parameters()) + list(net.b3.parameters()) + list(net.classifier1.parameters()) + list(net.classifier2.parameters()) + list(net.classifier3.parameters())
 
 opt1 = optim.SGD(cls_params, lr = args.lr, momentum = 0.9, weight_decay = 0.0005)
 
-apn_params = list(net.module.apn1.parameters()) + list(net.module.apn2.parameters())
+# apn_params = list(net.module.apn1.parameters()) + list(net.module.apn2.parameters())
+if args.cuda:
+    apn_params = list(net.module.apn1.parameters()) + list(net.module.apn2.parameters())
+else:
+    apn_params = list(net.apn1.parameters()) + list(net.apn2.parameters())
 opt2 = optim.SGD(apn_params, lr = args.lr, momentum = 0.9, weight_decay = 0.0005)
 #for param in apn_params:
 #    param.register_hook(print)
@@ -55,11 +70,15 @@ def train():
     batch_iterator = None
     
     trainset = CUB200_loader(os.getcwd() + '/data/CUB_200_2011', split = 'train')
-    trainloader = data.DataLoader(trainset, batch_size = 4,
-            shuffle = True, collate_fn = trainset.CUB_collate, num_workers = 4)
+    # trainloader = data.DataLoader(trainset, batch_size = 4,
+    #         shuffle = True, collate_fn = trainset.CUB_collate, num_workers = 4)
+    trainloader = data.DataLoader(trainset, batch_size = args.batch_size,
+                shuffle = True, collate_fn = trainset.CUB_collate, num_workers = args.num_workers)
     testset = CUB200_loader(os.getcwd() + '/data/CUB_200_2011', split = 'test')
-    testloader = data.DataLoader(testset, batch_size = 4,
-            shuffle = False, collate_fn = testset.CUB_collate, num_workers = 4)
+    # testloader = data.DataLoader(testset, batch_size = 4,
+    #         shuffle = False, collate_fn = testset.CUB_collate, num_workers = 4)
+    testloader = data.DataLoader(testset, batch_size = args.batch_size,
+            shuffle = False, collate_fn = testset.CUB_collate, num_workers = args.num_workers)
 
     apn_iter, apn_epoch, apn_steps = pretrainAPN(trainset, trainloader)
     cls_iter, cls_epoch, cls_steps = 0, 0, 1
@@ -88,7 +107,8 @@ def train():
             old_cls_loss = new_cls_loss
 
             images, labels = next(batch_iterator)
-            images, labels = Variable(images, requires_grad = True), Variable(labels)
+            # images, labels = Variable(images, requires_grad = True), Variable(labels)
+            images.requires_grad_()
             if args.cuda:
                 images, labels = images.cuda(), labels.cuda()
 
@@ -148,7 +168,8 @@ def train():
             old_apn_loss = new_apn_loss
 
             images, labels = next(batch_iterator)
-            images, labels = Variable(images, requires_grad = True), Variable(labels)
+            # images, labels = Variable(images, requires_grad = True), Variable(labels)
+            images.requires_grad_()
             if args.cuda:
                 images, labels = images.cuda(), labels.cuda()
 
@@ -206,7 +227,8 @@ def pretrainAPN(trainset, trainloader):
                 adjust_learning_rate(opt2, 0.1, apn_steps, args.lr)
 
         images, labels = next(batch_iterator)
-        images, labels = Variable(images, requires_grad = True), Variable(labels)
+        # images, labels = Variable(images, requires_grad = True), Variable(labels)
+        images.requires_grad_()
         if args.cuda:
             images, labels = images.cuda(), labels.cuda()
 
@@ -225,7 +247,8 @@ def pretrainAPN(trainset, trainloader):
                 loc_label = loc_label.cuda()
             for j in range(images.size(0)):
                 response_map = conv5s[i][j]
-                response_map = F.upsample(response_map, size = [resize, resize])
+                # response_map = F.upsample(response_map, size = [resize, resize])
+                response_map = F.interpolate(response_map, size = resize)
                 response_map = response_map.mean(0)
                 rawmaxidx = response_map.view(-1).max(0)[1]
                 idx = []

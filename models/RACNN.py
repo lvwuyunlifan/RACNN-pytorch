@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.autograd import Variable
+# from torch.autograd import Variable
 
 from .vgg import vgg19_bn
 
@@ -90,6 +90,10 @@ class AttentionCropFunction(torch.autograd.Function):
         unit = torch.stack([torch.arange(0, in_size)] * in_size)
         x = torch.stack([unit.t()] * 3)
         y = torch.stack([unit] * 3)
+
+        x = x.float()
+        y = y.float()
+
         if isinstance(images, torch.cuda.FloatTensor):
             x, y = x.cuda(), y.cuda()
         
@@ -112,8 +116,11 @@ class AttentionCropFunction(torch.autograd.Function):
             xatt = images[i] * mk
             
             xatt_cropped = xatt[:, h_off : h_end, w_off : w_end]
-            before_upsample = Variable(xatt_cropped.unsqueeze(0))
-            xamp = F.upsample(before_upsample, size=(224,224), mode='bilinear', align_corners = True)
+            # before_upsample = Variable(xatt_cropped.unsqueeze(0))
+            # xamp = F.upsample(before_upsample, size=(224,224), mode='bilinear', align_corners = True)
+            # pytorch 0.4.1
+            before_upsample = xatt_cropped.unsqueeze(0)
+            xamp = F.interpolate(before_upsample, size=(224,224), mode='bilinear', align_corners = True)
             ret.append(xamp.data.squeeze())
         
         ret_tensor = torch.stack(ret)
